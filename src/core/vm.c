@@ -177,12 +177,19 @@ void vmCollectGarbage(PKVM* vm) {
 bool vmPrepareFiber(PKVM* vm, Fiber* fiber, int argc, Var* argv) {
   ASSERT(fiber->closure->fn->arity >= -1,
          OOPS " (Forget to initialize arity.)");
-
-  // Like lua: Extra arguments are thrown away; extra parameters get null.
+  // If Fiber function is called with
+  // - more arguments than expected, then an error is raised
+  // - less arguments than expected, then unspecified arguments will
+  //   be set to null
   int nulls = 0;
   if (fiber->closure->fn->arity != -1) {
     if (argc > fiber->closure->fn->arity) {
-      argc = fiber->closure->fn->arity;
+      // ignore arguments
+      //argc = fiber->closure->fn->arity;
+      char buff[STR_INT_BUFF_SIZE];
+      sprintf(buff, "%d", fiber->closure->fn->arity);
+      _ERR_FAIL(stringFormat(vm, "Expected at most $ argument(s) for "
+                                 "function $.", buff, fiber->closure->fn->name));
     } else {
       nulls = fiber->closure->fn->arity - argc;
     }
@@ -1289,10 +1296,18 @@ L_do_call:
       // If we reached here it's a valid callable.
       ASSERT(closure != NULL, OOPS);
 
-      // Like lua: Extra arguments are thrown away; extra parameters get null.
+      // If Function is called with
+      // - more arguments than expected, then an error is raised
+      // - less arguments than expected, then unspecified arguments will
+      //   be set to null
       if (closure->fn->arity != -1) {
-        if (argc > closure->fn->arity) { // adjust stack
-          fiber->sp -= argc - closure->fn->arity;
+        if (argc > closure->fn->arity) {
+          // alternative is too ignore these arguments
+          // fiber->sp -= argc - closure->fn->arity;
+          char buff[STR_INT_BUFF_SIZE]; sprintf(buff, "%d", closure->fn->arity);
+          String* msg = stringFormat(vm, "Expected at most $ argument(s) "
+                                         "for function $", buff, closure->fn->name);
+          RUNTIME_ERROR(msg);
         }
         while (closure->fn->arity > argc) {
           PUSH(VAR_NULL);
